@@ -6,6 +6,7 @@ from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 import smtplib
 import logging
+import MySQLdb as mdb
 import time
 import sys
 
@@ -44,6 +45,12 @@ SMTP_SERVER = '...'
 # You can use SMS gateways to send messages to phones
 EMAIL_FROM = '...'
 EMAIL_TO = '...'
+
+# MySQL Database Infos
+MYSQL_HOST = 'localhost'
+MYSQL_USER = '...'
+MYSQL_PASSWORD = '...'
+MYSQL_DATABASE = 'teksavvy'
 
 # Path to logging file
 LOG_PATH = '/var/log/teksavvy-parser-log.txt'
@@ -84,7 +91,7 @@ while try_number > 0: # Had to do this while as my Raspberry Pi sometimes encoun
 	except:
 		logging.warning("Driver error (try " + str(try_number) + "), trying again")
 		try_number += 1
-driver.implicitly_wait(10)
+driver.implicitly_wait(15)
 
 logging.info("Entering account infos")
 
@@ -104,10 +111,12 @@ try:
 	logging.info("Accounts infos entered correctly")
 	
 	driver.find_element_by_link_text("Support").click()
+	logging.info("Now trying to switch to Usage page")
 	driver.find_element_by_link_text("Check Usage").click()
+	logging.info("Sucessfully got to Usage page")
 
 except NoSuchElementException, e:
-	logging.error("Could not connect to TekSavvy's website. Program wil now quit...")
+	logging.error("Could not connect to TekSavvy's website. Failed at login step, page %s. Program will now quit..." % driver.current_url)
 	driver.quit()
 	display.stop()
 	sys.exit(1)
@@ -139,6 +148,33 @@ else:
 driver.quit()
 display.stop()
 
+# ===========================
+# Sabing Usage to Database
+# ===========================
+
+logging.info("Trying to save usage to database")
+
+try:
+	con = mdb.connect(MYSQL_HOST,MYSQL_USER,MYSQL_PASSWORD,MYSQL_DATABASE)
+
+	cur = con.cursor()
+	cur.execute("INSERT INTO ts_usage VALUES(DEFAULT,'%s',%s,%s,%s,%s)" %
+		(time.strftime('%Y,%m,%d'),usage['peakdown'],usage['peakup'],usage['offpeakdown'],usage['offpeakup'])) 
+
+	con.commit()
+	logging.info("Sucessfully saved usage to database")
+
+except mdb.Error, e:
+	if con:
+		con.rollback()
+
+	logging.error("Saving to database failed. Error %d: %s" % (e.args[0],e.args[1]))
+	sys.exit(1)
+
+finally:
+	if con:
+		con.close()
+
 # ============================
 # Send an SMS with the balance
 # ============================
@@ -155,7 +191,6 @@ else:
 			content += "%s: %s gb\n" % (display_name, usage[usage_name])
 		except:
 			pass
-print content
 
 # Message
 message = MIMEText(content, 'plain')
