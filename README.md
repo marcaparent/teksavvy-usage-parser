@@ -1,5 +1,8 @@
 # TekSavvy Internet Usage Parser
 
+- NOT WORKING ANYMORE -
+(TekSavvy updated its website and users can now access to detailed infos at myaccount.teksavvy.com, therefore this script won't be supported anymore.)
+
 Fetches usage information from TekSavvy's MyWorld interface, saves them to MySQL Database and sends them by email. 
 
 The email format is the following:
